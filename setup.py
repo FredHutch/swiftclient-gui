@@ -1,17 +1,10 @@
 # -*- coding: utf-8 -*-
 
-# A simple setup script to create an executable using Tkinter. This also
-# demonstrates the method for creating a Windows executable that does not have
-# an associated console.
-#
-# SimpleTkApp.py is a very simple type of Tkinter application
-#
-# Run the build process by running the command 'python setup.py build'
-#
-# If everything works well you should find a subdirectory in the build
-# subdirectory that contains the files needed to run the application
+# A simple setup script to create an executable that includes
+# the python-swiftclient and easygui. 
 
 import sys
+import requests.certs
 from cx_Freeze import setup, Executable
 
 base = None
@@ -24,15 +17,34 @@ if sys.platform == 'win32':
 options = {
     'build_exe': {
         'packages': [],
-        'includes': ['swiftclient'],
-        #'excludes': ['Tkinter'],
+        'includes': [],
         'excludes': [],
+        'include_files':[(requests.certs.where(),'cacert.pem')],
         'compressed': True,
         #'path': sys.path + ['modules'],
         'include_msvcr': True,
-        'icon': 'swift.ico' 
+        'icon': 'swift.ico'
     }
 }
+
+##bdist_msi_options = {
+##    'upgrade_code': '{66620F3A-DC3A-11E2-B341-002219E9B01E}',
+##    'add_to_path': False,
+##    'initial_target_dir': r'[ProgramFilesFolder]\%s\%s' % (company_name, product_name),
+##    }
+##
+##build_exe_options = {
+##    'includes': ['atexit', 'PySide.QtNetwork'],
+##    }
+
+##setup(name=product_name,
+##      version='1.0.0',
+##      description='blah',
+##      executables=[exe],
+##      options={
+##          'bdist_msi': bdist_msi_options,
+##          'build_exe': build_exe_options})
+##
 
 executables = [
     Executable(

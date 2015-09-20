@@ -15,10 +15,19 @@
 # limitations under the License.
 
 
-import sys
-
+import sys, os, inspect
 from swiftclient.shell import main
 
 
+def get_script_dir(follow_symlinks=True):
+    if getattr(sys, 'frozen', False): # py2exe, PyInstaller, cx_Freeze
+        path = os.path.abspath(sys.executable)
+    else:
+        path = inspect.getabsfile(get_script_dir)
+    if follow_symlinks:
+        path = os.path.realpath(path)
+    return os.path.dirname(path)
+
 if __name__ == "__main__":
+    os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(get_script_dir(), "cacert.pem")
     sys.exit(main())
