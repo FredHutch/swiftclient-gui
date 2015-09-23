@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 
 """
-SwiftClientGUI is a simple wrapper for the Python Swift client that allows users to upload and download files to/from a
-swift object store
- 
+SwiftClientGUI is a simple wrapper for the Python Swift client that
+allows users to upload and download files to/from a swift object store
 """
-import sys, os, inspect, argparse, logging
+
+import sys, os, inspect, argparse, logging, json
 import easygui
 import swiftclient, keystoneclient
 from swiftclient.service import SwiftService
@@ -45,10 +45,10 @@ TEMP = os.environ["TEMP"]
 logger.info('username: %s  temp: %s' % (USERNAME, TEMP))
 ADGroupCache = {}
 BATCHMODE=False
+swifttenant="AUTH_Swift_xxxxxx"
 
 def main(args):
     """ main entry point """
-    setup()
     # set environment var for valid CA SSL cert
     os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(get_script_dir(), "cacert.pem")
 
@@ -57,50 +57,74 @@ def main(args):
 
     _default_global_options = {
         #"os_auth_token": args.os_auth_token,
-        #"os_storage_url": args.os_storage_url
-        "os_auth_token": 'AUTH_tk4d25ddf78b414d9597a296e4f90aacf6',
+        #"os_storage_url": args.os_storage_url,
+        "segment_size": 1073741824,
+        "use_slo": True,
+        "changed": True,
+                
+        
+        #"os_auth_token": 'AUTH_tk4d25ddf78b414d9597a296e4f90aacf6',
+        "os_auth_token": 'AUTH_tk58475fcbce87465c887f98eb4601e19a',
         "os_storage_url": 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp'   
         }
-    selcontainers = []
-    with SwiftService(options=_default_global_options) as swift:
-        # Do work here
-        x=swift.stat(container=None, objects=None, options=None)
-        logger.info('swift stat: %s' % x)
-        listing=swift.list(container=None, options=None)
-        for o in listing:
-            easygui.msgbox (o,"o in listing")
-            for i in o['listing']:
-                if not i['name'].startswith('.'):
-                    selcontainers.append(i['name'])
-           #print(o['name'])
-    choice=easygui.choicebox("Please pick a root folder (container) to upload to)","upload folder",selcontainers)
-    print (choice)
+
+    stats=SwiftService(options=_default_global_options).stat()
+    swifttenant=stats["items"][0][1]
         
-    sys.exit()
+        #jsonarr=json.dumps(stat,sort_keys=True, indent=2)
+        #print(jsonarr)
+        #for item in stat:
+        #    print(item[[headers])
+        #    #easygui.msgbox (
+
+    args.uploadfolder='d:\tmp\dirk'
 
     if args.downloadtofolder:
-        easygui.msgbox("Will now download from Swift to folder %s" % args.downloadtofolder, "%s launched from %s" % (__app__, args.downloadtofolder))
-        sys.exit()
+        #easygui.msgbox("Will now download from Swift to folder %s" % args.downloadtofolder, "%s launched from %s" % (__app__, args.downloadtofolder))
+        folder=selSwiftFolder(_default_global_options,swifttenant,"download")
 
-    if args.uploadfolder:
-        easygui.msgbox("Will now upload folder %s to Swift" % args.uploadfolder, "%s launched from %s" % (__app__, args.downloadtofolder))
-        sys.exit()
+    elif args.uploadfolder:
+        #easygui.msgbox("Will now upload folder %s to Swift" % args.uploadfolder, "%s launched from %s" % (__app__, args.downloadtofolder))
+        target=selSwiftFolder(_default_global_options,swifttenant,"upload")
+        ret=uploadFolder(args.uploadfolder,target) 
+        #print(something)
 
-    msg = "Enter the Swift connection settings"
-    title = "OpenStack Swift V2 connectivity"
-    fieldNames = ["Swift Auth URL", "Swift Tenant Name", "AD User Name", "AD Password"]
-    fieldValues = ["https://tin.fhcrc.org/auth/v2.0", "AUTH_Swift_xxxxxxxx_x", USERNAME, ""]
-    fieldValues = easygui.multpasswordbox(msg,title, fieldNames, fieldValues)
+    else:
+        authdata=setup()
+        swiftauthurl=authdata[0]
+        swifttenant=authdata[1]
+        swiftaccount=authdata[2]
+        swiftpassword=authdata[3]
+        
+        easygui.msgbox("To copy Data from and to Swift please right click on a folder in Explorer and select 'Swift:...'", "%s (%s)" % (__app__, myPath))
 
-    swiftauthurl=fieldValues[0]
-    swifttenant=fieldValues[1]
-    swiftaccount=fieldValues[2]
-    swiftpassword=fieldValues[3]
-
+def uploadFolder(src,targ):
+    pass
     
 
-    
-            
+def selSwiftFolder(options,swifttenant,mode):
+    visible_containers = []
+    visible_containers.append("----------- Switch Account (current: %s) --------------------" % swifttenant)
+    if mode=="upload":
+        visible_containers.append("------------ Create new root folder (Container) -----------")    
+    with SwiftService(options=options) as swift:
+        # Do work here
+        #x=swift.stat(container=None, objects=None, options=None)
+        #logger.info('swift stat: %s' % x)
+        listing=swift.list(container=None, options=None)
+        for o in listing:
+            #easygui.msgbox (o,"o in listing")
+            for i in o['listing']:
+                if not i['name'].startswith('.'):
+                    visible_containers.append(i['name'])
+           #print(o['name'])
+    if mode=="upload":
+        msg="Please pick a root folder (container) to upload to"
+    elif mode=="download":
+        msg="Please pick a root folder (container) to download from"
+    choice = easygui.choicebox(msg,"Select Folder/Container for data transfer",visible_containers)
+    return choice
+                
 def get_script_dir(follow_symlinks=True):
     if getattr(sys, 'frozen', False): # py2exe, PyInstaller, cx_Freeze
         path = os.path.abspath(sys.executable)
@@ -157,9 +181,16 @@ def setup():
         
     #ret = winreg.SetValue(MyHKEY,'SOFTWARE\Classes\Directory\shell\OpenStackSwiftClient3',REG_SZ,'Swift: other options...')
     #ret = winreg.SetValue(MyHKEY,'SOFTWARE\Classes\Directory\shell\OpenStackSwiftClient3\command',REG_SZ,'"%s" -o "%%1"' % targetPath)
-    
-    easygui.msgbox("To copy Data from and to Swift please right click on a folder in Explorer and select 'Swift:...'", "%s (%s)" % (__app__, myPath))
 
+    msg = "Enter the Swift connection settings"
+    title = "OpenStack Swift V2 connectivity"
+    fieldNames = ["Swift Auth URL", "Swift Tenant Name", "AD User Name", "AD Password"]
+    fieldValues = ["https://tin.fhcrc.org/auth/v2.0", "AUTH_Swift_xxxxxxxx_x", USERNAME, ""]
+    fieldValues = easygui.multpasswordbox(msg,title, fieldNames, fieldValues)
+
+    return fieldValues 
+    
+ 
 def parse_arguments():
     """
     Gather command-line arguments.
