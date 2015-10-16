@@ -60,15 +60,30 @@ def main(args):
         #"os_storage_url": args.os_storage_url,
         "segment_size": 1073741824,
         "use_slo": True,
-        "changed": True,
-                
-        
+        "changed": True,                
         #"os_auth_token": 'AUTH_tk4d25ddf78b414d9597a296e4f90aacf6',
-        "os_auth_token": 'AUTH_tk58475fcbce87465c887f98eb4601e19a',
-        "os_storage_url": 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp'   
+        "os_auth_token": 'AUTH_tkde2271ee9fab47008815f8f07e08d5c1',
+        "os_storage_url": 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp',
+        "os_tenant_name": os.environ.get('OS_TENANT_NAME')
+        }
+
+    _default_local_options = {
+        'segment_container': None,
+        #'changed': None,
+        'yes_all': False,
+        'out_file': None,
+        'long': False,
+        'meta': [],
+        'prefix': None,
+        'delimiter': None
         }
 
     stats=SwiftService(options=_default_global_options).stat()
+    if not stats["success"]:
+        easygui.msgbox("Not Authenticated",__app__)
+        ##stats=SwiftService(options=_default_global_options).stat()
+        return False
+    
     swifttenant=stats["items"][0][1]
         
         #jsonarr=json.dumps(stat,sort_keys=True, indent=2)
@@ -77,7 +92,7 @@ def main(args):
         #    print(item[[headers])
         #    #easygui.msgbox (
 
-    args.uploadfolder='d:\tmp\dirk'
+    args.uploadfolder='d:/tmp/dirk'
 
     if args.downloadtofolder:
         #easygui.msgbox("Will now download from Swift to folder %s" % args.downloadtofolder, "%s launched from %s" % (__app__, args.downloadtofolder))
@@ -98,8 +113,49 @@ def main(args):
         
         easygui.msgbox("To copy Data from and to Swift please right click on a folder in Explorer and select 'Swift:...'", "%s (%s)" % (__app__, myPath))
 
-def uploadFolder(src,targ):
-    pass
+def uploadFolder(src,targ_container):
+
+    _default_local_options= {
+        'meta': [],
+        'headers': [],
+        'segment_size': None,
+        'use_slo': False,
+        'segment_container': None,
+        'leave_segments': False,
+        'changed': None,
+        'skip_identical': False,
+        'fail_fast': False,
+        'dir_marker': False  # Only for None sources
+    }
+
+    dirlist = [src,]
+    with SwiftService(options=_default_local_options) as swift:        
+        for r in swift.upload(targ_container, dirlist):
+            if r['success']:
+                if options.verbose:
+                    if 'attempts' in r and r['attempts'] > 1:
+                        if 'object' in r:
+                            output_manager.print_msg(
+                                '%s [after %d attempts]' %
+                                (r['object'],
+                                 r['attempts'])
+                            )
+                    else:
+                        if 'object' in r:
+                            output_manager.print_msg(r['object'])
+                        elif 'for_object' in r:
+                            output_manager.print_msg(
+                                '%s segment %s' % (r['for_object'],
+                                                   r['segment_index'])
+                        )
+            else:
+                error = r['error']
+                print("myError",error)
+                #if isinstance(error, SwiftError):
+                #    output_manager.error(error.value)
+                #else:
+                #    output_manager.error("Unexpected Error during upload: "
+                #                         "%s" % error)
     
 
 def selSwiftFolder(options,swifttenant,mode):
