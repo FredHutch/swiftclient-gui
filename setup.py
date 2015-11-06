@@ -19,7 +19,7 @@ options = {
         'packages': [],
         'includes': [],
         'excludes': [],
-        'include_files':[(requests.certs.where(),'cacert.pem')],
+        'include_files':[(requests.certs.where(),'cacert.pem'),'WinTail.exe','README.md'],
         'compressed': True,
         #'path': sys.path + ['modules'],
         'include_msvcr': True,
