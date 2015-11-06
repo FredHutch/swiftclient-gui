@@ -20,6 +20,28 @@ from swiftclient.multithreading import OutputManager
 # the new way of using swift 
 from swiftclient.service import SwiftService
 
+class KeyboardInterruptError(Exception): pass
+
+#constants
+__app__ = "Swift Client GUI"
+__ver__ = "0.12"
+__ver_date__ = "2015-11-01" 
+__copy_date__ = "2015"
+__author__ = "Dirk Petersen <dirk14@fredhutch.org>"
+__company__ = "Fred Hutch, Seattle"
+
+
+HKEY_CURRENT_USER = -2147483647
+HKEY_LOCAL_MACHINE = -2147483646
+REG_SZ = 1
+swifttenant="AUTH_Swift_xxxxxx"
+
+#variables
+USERNAME = os.environ["USERNAME"]
+swift_auth=os.environ.get("ST_AUTH")
+swift_auth_token=os.environ.get("OS_AUTH_TOKEN")
+storage_url=os.environ.get("OS_STORAGE_URL")
+
 logger = logging.getLogger('SWG')
 logger.setLevel(logging.DEBUG)
 # create file handler which logs even debug messages
@@ -29,36 +51,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
-
-class KeyboardInterruptError(Exception): pass
-
-__app__ = "Swift Client GUI"
-__ver__ = "0.12"
-__ver_date__ = "2015-11-01" 
-__copy_date__ = "2015"
-__author__ = "Dirk Petersen <dirk14@fredhutch.org>"
-__company__ = "Fred Hutch, Seattle"
-
-#constants
-APPFILE = "SwiftClientGUI.exe"
-APPDIR="SwiftClientGUI" # script will be installed under %ProgramFiles%\%APPDIR% or %USERPROFILE%\%APPDIR%
-WINDOMAIN="FHCRC"  
-HKEY_CURRENT_USER = -2147483647
-HKEY_LOCAL_MACHINE = -2147483646
-REG_SZ = 1
-
-#variables
-USERNAME = os.environ["USERNAME"]
-TEMP = tempfile.gettempdir()
-#easygui.msgbox(USERNAME,TEMP)
-logger.info('username: %s  temp: %s' % (USERNAME, TEMP))
-ADGroupCache = {}
-BATCHMODE=False
-swifttenant="AUTH_Swift_xxxxxx"
-
-swift_auth=os.environ.get("ST_AUTH")
-swift_auth_token=os.environ.get("OS_AUTH_TOKEN")
-storage_url=os.environ.get("OS_STORAGE_URL")
+logger.info('username: %s  temp: %s' % (USERNAME, tempfile.gettempdir()))
 
 def main(args):
     """ main entry point """
@@ -100,10 +93,10 @@ def main(args):
     swifttenant=stats["items"][0][1]
 
     #args.uploadfolder='c:/temp/'
+    #args.downloadtofolder='d:/tmp/dl'
     #args.uploadfolder=easygui.diropenbox("Please select a folder for upload","Uploading Folder")
     #args.downloadtofolder=easygui.diropenbox("Please select a folder to download to.","Downloading to Folder")
-    #args.downloadtofolder='d:/tmp/dl'
-                   
+                       
     if args.downloadtofolder:
         args.downloadtofolder=args.downloadtofolder.replace('\\','/')
         basename=os.path.basename(args.downloadtofolder)
@@ -150,7 +143,6 @@ def selSwiftFolderUpload(options,swifttenant,basename):
     choice = easygui.choicebox(msg,"Select Folder/Container for data transfer",visible_containers)
     return choice
 
-
 def selSwiftFolderDownload(options,swifttenant):
     choice=''
     oldchoice=''
@@ -158,9 +150,6 @@ def selSwiftFolderDownload(options,swifttenant):
     prefix=''
     myoptions={'prefix': None}
     with SwiftService(options=options) as swift:
-        # Do work here
-        #x=swift.stat(container=None, objects=None, options=None)
-        #logger.info('swift stat: %s' % x)
         
         while not choice.startswith('------------ DOWNLOAD FOLDER'):            
             visible_folders = []         
@@ -248,7 +237,7 @@ def upload_folder_to_swift(fname,swiftname,container,meta):
     if meta:
         final=meta+final
     sw_upload("--object-name="+swiftname,
-        #"--segment-size=2147483648",
+        #"--segment-size=2147483648",  (This is 2GB)
         "--segment-size=1073741824",
         "--use-slo",
         "--changed",
@@ -282,7 +271,6 @@ def download_folder_from_swift(fname,swiftname,container):
     sys.stdout = oldout
     sys.stderr = olderr
     fh.close()
-
 
 # define minimum parser object to allow swiftstack shell to run (taken from swbundler)
 def shell_minimal_options():
@@ -351,23 +339,6 @@ def sw_upload(*args):
 def sw_post(*args):
     sw_shell(shell.st_post,*args)
 
-##def create_sw_conn():
-##   global swift_auth,swift_auth_token,storage_url
-##
-##   if swift_auth_token and storage_url:
-##      return swiftclient.Connection(preauthtoken=swift_auth_token,preauthurl=storage_url)
-##
-##   if swift_auth:
-##      swift_user=os.environ.get("ST_USER")
-##      swift_key=os.environ.get("ST_KEY")
-##
-##      if swift_user and swift_key:
-##         return swiftclient.Connection(authurl=swift_auth,user=swift_user,key=swift_key)
-##
-##   print("Error: Swift environment not configured!")
-##   sys.exit()
-
-
 def getDriveAuth():
     # get config settings from openstack drive.
     mykey = winreg.OpenKey(HKEY_CURRENT_USER,'Software\Vehera\OpenStack.Drive', 0, winreg.KEY_ALL_ACCESS)
@@ -397,16 +368,6 @@ def setup():
     # check if this executable is under program files or Users
     targetPath = ""
     MyHKEY = HKEY_CURRENT_USER
-##    if myPath.startswith(programFiles):
-##        MyHKEY = HKEY_LOCAL_MACHINE
-##        targetPath = programFiles+'\\'+APPDIR+'\\'+APPFILE
-##    elif myPath.startswith(homeDir):
-##        MyHKEY = HKEY_CURRENT_USER
-##        targetPath = homeDir+'\\'+APPDIR+'\\'+APPFILE
-##            
-##    if MyHKEY == "":
-##        msg.showerror("This is not properly installed", "The Software should be copied to 'Program Files' or to a user profile and then be executed.")
-##        return
 
     ret = winreg.SetValue(MyHKEY,'SOFTWARE\Classes\Directory\shell\OpenStackSwiftClient1',REG_SZ,'Swift: Upload folder...')
     mykey = winreg.OpenKey(MyHKEY,'SOFTWARE\Classes\Directory\shell\OpenStackSwiftClient1', 0, winreg.KEY_ALL_ACCESS)
@@ -477,92 +438,6 @@ def parse_arguments():
         default=os.environ.get('OS_STORAGE_URL'))                                 
     args = parser.parse_args()
     return args
-
-
-def Service_init():    
-    _default_global_options = {
-        #"os_auth_token": args.os_auth_token,
-        #"os_storage_url": args.os_storage_url,
-        "segment_size": 1073741824,
-        "use_slo": True,
-        "changed": True,                
-        #"os_auth_token": 'AUTH_tk4d25ddf78b414d9597a296e4f90aacf6',
-        "os_auth_token": 'AUTH_tk6c171a992ae047da84f840cb0e9254a2',
-        "os_storage_url": 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp',
-        "os_tenant_name": os.environ.get('OS_TENANT_NAME')
-        }
-
-    _default_local_options = {
-        'segment_container': None,
-        #'changed': None,
-        'yes_all': False,
-        'out_file': None,
-        'long': False,
-        'meta': [],
-        'prefix': None,
-        'delimiter': None
-        }
-
-    stats=SwiftService(options=_default_global_options).stat()
-    if not stats["success"]:
-        easygui.msgbox("Not Authenticated",__app__)
-        ##stats=SwiftService(options=_default_global_options).stat()
-        return False
-    
-    swifttenant=stats["items"][0][1]
-        
-        #jsonarr=json.dumps(stat,sort_keys=True, indent=2)
-        #print(jsonarr)
-        #for item in stat:
-        #    print(item[[headers])
-        #    #easygui.msgbox (
-
-
-
-def Service_uploadFolder(src,targ_container):
-
-    _default_local_options= {
-        'meta': [],
-        'headers': [],
-        'segment_size': None,
-        'use_slo': False,
-        'segment_container': None,
-        'leave_segments': False,
-        'changed': None,
-        'skip_identical': False,
-        'fail_fast': False,
-        'dir_marker': False  # Only for None sources
-    }
-
-    dirlist = [src,]
-    with SwiftService(options=_default_local_options) as swift:        
-        for r in swift.upload(targ_container, dirlist):
-            if r['success']:
-                if options.verbose:
-                    if 'attempts' in r and r['attempts'] > 1:
-                        if 'object' in r:
-                            output_manager.print_msg(
-                                '%s [after %d attempts]' %
-                                (r['object'],
-                                 r['attempts'])
-                            )
-                    else:
-                        if 'object' in r:
-                            output_manager.print_msg(r['object'])
-                        elif 'for_object' in r:
-                            output_manager.print_msg(
-                                '%s segment %s' % (r['for_object'],
-                                                   r['segment_index'])
-                        )
-            else:
-                error = r['error']
-                print("myError",error)
-                #if isinstance(error, SwiftError):
-                #    output_manager.error(error.value)
-                #else:
-                #    output_manager.error("Unexpected Error during upload: "
-                #                         "%s" % error)
-
 
 
 if __name__ == '__main__':
