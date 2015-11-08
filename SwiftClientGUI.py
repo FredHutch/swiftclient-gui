@@ -6,8 +6,8 @@ SwiftClientGUI is a simple wrapper for the Python Swift client that
 allows users to upload and download files to/from a swift object store
 """
 
-import sys, os, inspect, argparse, logging, json, subprocess, tempfile, socket, base64
-import getpass, optparse
+import sys, os, inspect, argparse, logging, json, subprocess
+import getpass, optparse, tempfile, socket, base64
 import easygui
 import swiftclient, keystoneclient
 import decryptsme
@@ -62,89 +62,83 @@ logger.info('username: %s  temp: %s' % (USERNAME, tempfile.gettempdir()))
 
 def main(args):
     """ main entry point """
+
     global _default_global_options
-
-    authlist=setup_read()
-
-    print('os_auth_token', _default_global_options['os_auth_token'])
-    print('os_storage_url', _default_global_options['os_storage_url'])
-    print('os_auth_url', _default_global_options['os_auth_url'])
-    print('os_username', _default_global_options['os_username'])
-    print('os_password', _default_global_options['os_password'])
-    print('os_tenant_name', _default_global_options['os_tenant_name'])
-    print('os_region_name', _default_global_options['os_region_name'])
-    print('auth', _default_global_options['auth'])
-    print('user', _default_global_options['user'])
-    print('key', _default_global_options['key'])
-
-    #_default_global_options['os_storage_url'] = 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp'
-    #_default_global_options['os_auth_token'] = 'AUTH_tk3d7438ae35934666affdefbf26429ae3'
-
-    #setup_write()
-
-    #getDriveAuth()
-    #sys.exit()
-        
     # set environment var for valid CA SSL cert
     os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(get_script_dir(), "cacert.pem")
-    
     meta=[]
+    authlist=setup_read()
+    
+##    print('os_auth_token', _default_global_options['os_auth_token'])
+##    print('os_storage_url', _default_global_options['os_storage_url'])
+##    print('os_auth_url', _default_global_options['os_auth_url'])
+##    print('os_username', _default_global_options['os_username'])
+##    print('os_password', _default_global_options['os_password'])
+##    print('os_tenant_name', _default_global_options['os_tenant_name'])
+##    print('os_region_name', _default_global_options['os_region_name'])
+##    print('auth', _default_global_options['auth'])
+##    print('user', _default_global_options['user'])
+##    print('key', _default_global_options['key'])
+
+##    _default_global_options['os_storage_url'] = 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp'
+##    _default_global_options['os_auth_token'] = 'AUTH_tk3d7438ae35934666affdefbf26429ae3'
 
     stats=SwiftService(options=_default_global_options).stat()
-    if not stats["success"]:
-        easygui.msgbox("Not Authenticated",__app__)
-        ##stats=SwiftService(options=_default_global_options).stat()
-        return False
+    while not stats["success"]:
+        setup_write()
+        authlist=setup_read()
+        stats=SwiftService(options=_default_global_options).stat()
     
     swifttenant=stats["items"][0][1]
 
-    #args.uploadfolder='c:/temp/'
+    #args.uploadfolder='c:/Python/py/swift'
     #args.downloadtofolder='d:/tmp/dl'
-    #args.uploadfolder=easygui.diropenbox("Please select a folder for upload","Uploading Folder")
-    args.downloadtofolder=easygui.diropenbox("Please select a folder to download to.","Downloading to Folder")
-                       
+
+    if not args.downloadtofolder and not args.uploadfolder:
+        choices = ["Upload to Swift","Download from Swift","Cancel"]
+        choice=easygui.buttonbox("To copy data from and to Swift please right click on a folder in Explorer and select 'Swift:...' ..... or select one of the following options", choices=choices)
+        if choice == 'Upload to Swift':
+            args.uploadfolder=easygui.diropenbox("Please select a folder for upload","Uploading Folder")
+        elif choice == 'Download from Swift':
+            args.downloadtofolder=easygui.diropenbox("Please select a folder to download to.","Downloading to Folder")
+        elif choice == 'Cancel':
+            sys.exit()
+            
     if args.downloadtofolder:
         args.downloadtofolder=args.downloadtofolder.replace('\\','/')
+        args.downloadtofolder=args.downloadtofolder.strip('/')
         basename=os.path.basename(args.downloadtofolder)
         #easygui.msgbox("Will now download from Swift to folder %s" % args.downloadtofolder, "%s launched from %s" % (__app__, args.downloadtofolder))
         container,prefix=selSwiftFolderDownload(_default_global_options,swifttenant)
-        ret=download_folder_from_swift(args.downloadtofolder,prefix,container)
-        print('selSwiftFolderDownload',container,prefix)
-        
+        subdir=container+'/'+prefix
+        subdir=os.path.basename(subdir.strip('/'))
+        ret=download_folder_from_swift(args.downloadtofolder+'/'+subdir,prefix,container)       
     elif args.uploadfolder:
         args.uploadfolder=args.uploadfolder.replace('\\','/')
-        #args.uploadfolder,os.path.basename(args.uploadfolder)
+        args.uploadfolder=args.uploadfolder.strip('/')
         basename=os.path.basename(args.uploadfolder)
         container=selSwiftFolderUpload(_default_global_options,swifttenant,basename)
-        if container=="------------ Upload to new container '%s'-----------" % basename:
+        pseudodir=os.path.basename(args.uploadfolder)
+        if container.startswith("------------ Upload to root of (new) container"):
             container=basename
-            args.uploadfolder=os.path.dirname(args.uploadfolder)
-        ret=upload_folder_to_swift(args.uploadfolder,os.path.basename(args.uploadfolder),container,meta)
-        #print(something)
-    else:
-        authdata=setup_read()
-        swiftauthurl=authdata[0]
-        swifttenant=authdata[1]
-        swiftaccount=authdata[2]
-        swiftpassword=authdata[3]
-        
-        easygui.msgbox("To copy Data from and to Swift please right click on a folder in Explorer and select 'Swift:...'", "%s (%s)" % (__app__, myPath))
+            pseudodir=''
+        ret=upload_folder_to_swift(args.uploadfolder,pseudodir,container,meta)
+
+    #print("End")
 
 def selSwiftFolderUpload(options,swifttenant,basename):
     visible_containers = []
     #visible_containers.append("----------- Switch Account (current: %s) --------------------" % swifttenant)
-    visible_containers.append("------------ Upload to new container '%s'-----------" % basename)
+    visible_containers.append("------------ Upload to root of (new) container '%s'-----------" % basename)
     with SwiftService(options=options) as swift:
         # Do work here
         #x=swift.stat(container=None, objects=None, options=None)
         #logger.info('swift stat: %s' % x)
         listing=swift.list(container=None, options=None)
         for o in listing:
-            #easygui.msgbox (o,"o in listing")
             for i in o['listing']:
                 if not i['name'].startswith('.'):
                     visible_containers.append(i['name'])
-           #print(o['name'])
     msg="Please pick a root folder (container) to upload to"
     choice = easygui.choicebox(msg,"Select Folder/Container for data transfer",visible_containers)
     return choice
@@ -243,7 +237,7 @@ def upload_folder_to_swift(fname,swiftname,container,meta):
     if meta:
         final=meta+final
     sw_upload("--object-name="+swiftname,
-        "--segment-size="+_default_global_options['segment_size'],
+        "--segment-size=1073741824",   # should be _default_global_options['segment_size'] but is not working
         "--use-slo",
         "--changed",
         "--segment-container=.segments_"+container,
@@ -425,17 +419,20 @@ def setup_read():
 
 def setup_write():
 
+    auth = DEFAULT_AUTH_URL
+    tenant = DEFAULT_TENANT
+    user = USERNAME
     if _default_global_options['os_auth_url']:
-        DEFAULT_AUTH_URL = _default_global_options['os_auth_url']
+        auth = _default_global_options['os_auth_url']
     if _default_global_options['os_tenant_name']:
-        DEFAULT_TENANT = _default_global_options['os_tenant_name']
+        tenant = _default_global_options['os_tenant_name']
     if _default_global_options['os_username']:
-        USERNAME = _default_global_options['os_username']
+        user = _default_global_options['os_username']
 
     msg = "Enter the Swift connection settings"
     title = "OpenStack Swift Authentication"
     fieldNames = ["Swift Auth URL", "Swift Tenant Name", "User Name", "Password"]
-    fieldValues = [DEFAULT_AUTH_URL, DEFAULT_TENANT, USERNAME, ""]
+    fieldValues = [auth, tenant, user, ""]
     fieldValues = easygui.multpasswordbox(msg,title, fieldNames, fieldValues)
 
     OS = sys.platform
@@ -458,14 +455,17 @@ def setup_read_win():
     else:
         import _winreg as winreg
 
-    authlist = []
+    authlist = [""]*4
 
     MyHKEY = HKEY_CURRENT_USER
-    mykey = winreg.OpenKey(MyHKEY,'SOFTWARE\OpenStack\SwiftClient', 0, winreg.KEY_ALL_ACCESS)
-    authlist.append(winreg.QueryValueEx(mykey,"auth_url")[0])
-    authlist.append(winreg.QueryValueEx(mykey,"tenant")[0])
-    authlist.append(winreg.QueryValueEx(mykey,"user")[0])
-    authlist.append(decode(KEY,winreg.QueryValueEx(mykey,"pass")[0]))
+    try:
+        mykey = winreg.OpenKey(MyHKEY,'SOFTWARE\OpenStack\SwiftClient', 0, winreg.KEY_ALL_ACCESS)
+        authlist[0] = winreg.QueryValueEx(mykey,"auth_url")[0]
+        authlist[1] = winreg.QueryValueEx(mykey,"tenant")[0]
+        authlist[2] = winreg.QueryValueEx(mykey,"user")[0]
+        authlist[3] = decode(KEY,winreg.QueryValueEx(mykey,"pass")[0])
+    except:
+        print ("Error reading data from registry")
     return authlist
     
 def setup_read_mac():
@@ -524,27 +524,9 @@ def parse_arguments():
         action='store',
         help='a folder on a posix file system ',
         default='' )
-##    parser.add_argument( '--upload-file', '-f', dest='uploadfile',
-##        action='store',
-##        help='a folder on a posix file system ',
-##        default='' )
-##    parser.add_argument( '--threads', '-t', dest='maxthreads',
-##        action='store',
-##        type=int,
-##        help='maximum number of threads to run (default=10)',
-##        default=10 )
-##    parser.add_argument( '--container', '-c', dest='container',
-##        action='store',
-##        help='a container in the swift object store',
-##        default='' )
-##    parser.add_argument( '--prefix', '-x', dest='prefix',
-##        action='store',
-##        help='a swift object prefix',
-##        default=None)
                             
     args = parser.parse_args()
     return args
-
 
 if __name__ == '__main__':
     # Parse command-line arguments
