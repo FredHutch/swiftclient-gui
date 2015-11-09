@@ -24,20 +24,21 @@ class KeyboardInterruptError(Exception): pass
 
 #constants
 __app__ = "Swift Client GUI"
-__ver__ = "0.15"
-__ver_date__ = "2015-11-07" 
+__ver__ = "0.17"
+__ver_date__ = "2015-11-08" 
 __copy_date__ = "2015"
 __author__ = "Dirk Petersen <dirk11@fredhutch.org>"
 __company__ = "Fred Hutch, Seattle"
-
 
 IP = socket.gethostbyname(socket.gethostname())
 
 HKEY_CURRENT_USER = -2147483647
 HKEY_LOCAL_MACHINE = -2147483646
 REG_SZ = 1
+REG_DWORD = 4
 USERNAME = getpass.getuser()
 KEY = 'gjkdjgndfhdgfgdldfgj902u54nkk34u8os'
+
 if IP.startswith('140.107.'):
     DEFAULT_AUTH_URL="https://tin.fhcrc.org/auth/v2.0"
     DEFAULT_TENANT="AUTH_Swift_llllllllll_f"
@@ -58,6 +59,9 @@ fh.setFormatter(formatter)
 # add the handlers to the logger
 logger.addHandler(fh)
 logger.info('username: %s  temp: %s' % (USERNAME, tempfile.gettempdir()))
+
+#sys.stdout = open(os.path.join(tempfile.gettempdir(),"SwiftClientGUI.out.txt"), 'w')
+#sys.stderr = open(os.path.join(tempfile.gettempdir(),"SwiftClientGUI.err.txt"), 'w')
 
 
 def main(args):
@@ -83,24 +87,33 @@ def main(args):
 ##    _default_global_options['os_storage_url'] = 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp'
 ##    _default_global_options['os_auth_token'] = 'AUTH_tk3d7438ae35934666affdefbf26429ae3'
 
-    stats=SwiftService(options=_default_global_options).stat()
-    while not stats["success"]:
-        setup_write()
+##    _default_global_options['os_auth_url'] = 'https://tin.fhcrc.org/auth/v2.0'
+##    _default_global_options['os_username'] = 'petersen'
+##    _default_global_options['os_password'] = ''
+##    _default_global_options['os_tenant_name'] = 'AUTH_Swift__ADM_SciComp'
+    
+    stats=SwiftService(options=_default_global_options).stat()    
+    while not stats["success"] == True:
+        if not setup_write():
+            return False        
         authlist=setup_read()
         stats=SwiftService(options=_default_global_options).stat()
-    
+
     swifttenant=stats["items"][0][1]
 
-    #args.uploadfolder='c:/Python/py/swift'
-    #args.downloadtofolder='d:/tmp/dl'
+    #args.uploadfolder='c:/temp/test'
+    #args.downloadtofolder='c:/temp/test'
 
     if not args.downloadtofolder and not args.uploadfolder:
-        choices = ["Upload to Swift","Download from Swift","Cancel"]
+        choices = ["Upload to Swift","Download from Swift","Change Credentials","Cancel"]
         choice=easygui.buttonbox("To copy data from and to Swift please right click on a folder in Explorer and select 'Swift:...' ..... or select one of the following options", choices=choices)
         if choice == 'Upload to Swift':
             args.uploadfolder=easygui.diropenbox("Please select a folder for upload","Uploading Folder")
         elif choice == 'Download from Swift':
             args.downloadtofolder=easygui.diropenbox("Please select a folder to download to.","Downloading to Folder")
+        elif choice == 'Change Credentials':
+            if not setup_write():
+                return False 
         elif choice == 'Cancel':
             sys.exit()
             
@@ -118,11 +131,12 @@ def main(args):
         args.uploadfolder=args.uploadfolder.strip('/')
         basename=os.path.basename(args.uploadfolder)
         container=selSwiftFolderUpload(_default_global_options,swifttenant,basename)
-        pseudodir=os.path.basename(args.uploadfolder)
-        if container.startswith("------------ Upload to root of (new) container"):
-            container=basename
-            pseudodir=''
-        ret=upload_folder_to_swift(args.uploadfolder,pseudodir,container,meta)
+        if container:
+            pseudodir=os.path.basename(args.uploadfolder)
+            if container.startswith("------------ Upload to root of (new) container"):
+                container=basename
+                pseudodir=''
+            ret=upload_folder_to_swift(args.uploadfolder,pseudodir,container,meta)
 
     #print("End")
 
@@ -447,7 +461,30 @@ def setup_write():
         return setup_write_linux(fieldValues)
 
 def setup_read_linux():
-    print('not yet implemented')
+    if sys.hexversion > 0x03000000:
+        from configparser import ConfigParser 
+    else:
+        from ConfigParser import ConfigParser
+
+    authlist = [""]*4
+
+    homedir = os.path.expanduser('~')
+    if not os.path.exists(homedir+'/.swift'):
+        return authlist
+        
+    # instantiate
+    config = ConfigParser()
+
+    # parse existing file
+    config.read(homedir+'/.swift/swiftclient.ini')
+
+    # add a new section and some values
+    authlist[0] = config.get('default', 'auth_url')
+    authlist[1] = config.get('default', 'tenant')
+    authlist[2] = config.get('default', 'user')
+    authlist[3] = decode(KEY,config.get('default', 'pass'))
+    
+    return authlist
 
 def setup_read_win():
     if sys.hexversion > 0x03000000:
@@ -468,12 +505,38 @@ def setup_read_win():
         print ("Error reading data from registry")
     return authlist
     
-def setup_read_mac():
-    print('not yet implemented')
+def setup_read_mac(authlist):
+    # don't have anything for mac, use linux settings for now
+    return setup_read_linux(authlist)
 
+def setup_write_linux(authlist):
+    if sys.hexversion > 0x03000000:
+        from configparser import ConfigParser 
+    else:
+        from ConfigParser import ConfigParser
 
-def setup_write_linux():
-    print('not yet implemented')
+    # instantiate
+    config = ConfigParser()
+
+    # parse existing file
+    #config.read('test.ini')
+
+    # add a new section and some values
+    config.add_section('default')
+    config.set('default', 'auth_url', authlist[0])
+    config.set('default', 'tenant', authlist[1])
+    config.set('default', 'user', authlist[2])
+    config.set('default', 'pass', encode(KEY,authlist[3]))
+
+    # save to a file
+    homedir = os.path.expanduser('~')
+    if not os.path.exists(homedir+'/.swift'):
+        os.makedirs(homedir+'/.swift')
+    with open(homedir+'/.swift/swiftclient.ini', 'w') as configfile:
+        config.write(configfile)
+
+    return authlist
+    
 
 def setup_write_win(authlist):
     """ setup is executed if this program is started without any command line args. """
@@ -496,6 +559,12 @@ def setup_write_win(authlist):
     winreg.SetValueEx(mykey, "Icon", None, REG_SZ, '"%s",0' % myPath)
     mykey.Close()
     ret = winreg.SetValue(MyHKEY,'SOFTWARE\Classes\Directory\shell\OpenStackSwiftClient2\command',REG_SZ,'"%s" --download-to-folder "%%1"' % myPath)
+
+    #set wintail position:
+    ret = winreg.SetValue(MyHKEY,'SOFTWARE\WinTail\WindowPosition',REG_SZ,"")
+    mykey = winreg.OpenKey(MyHKEY,'SOFTWARE\WinTail\WindowPosition', 0, winreg.KEY_ALL_ACCESS)
+    winreg.SetValueEx(mykey, "AlwaysOnTop", None, REG_DWORD, 1)
+    mykey.Close()
         
     #setting authentication
     if authlist:
@@ -506,9 +575,13 @@ def setup_write_win(authlist):
         winreg.SetValueEx(mykey, "user", None, REG_SZ, authlist[2])
         winreg.SetValueEx(mykey, "pass", None, REG_SZ, encode(KEY,authlist[3]))
         mykey.Close()
+        return authlist
+    else:
+        return None
         
 def setup_write_mac():
-    print('not yet implemented')
+    # don't have anything for mac, use linux settings for now
+    return setup_write_linux(authlist)
  
 def parse_arguments():
     """

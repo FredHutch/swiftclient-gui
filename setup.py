@@ -11,19 +11,24 @@ base = None
 basegui = None
 if sys.platform == 'win32':
     basegui = 'Win32GUI'
-    if 'bdist_msi' in sys.argv:
-        sys.argv += ['--initial-target-dir', 'C:\\Program Files\\OpenStack\\Swift']
+    #if 'bdist_msi' in sys.argv:
+    #    sys.argv += ['--initial-target-dir', 'C:\\Program Files\\OpenStack\\Swift']
 
 options = {
     'build_exe': {
         'packages': [],
         'includes': [],
         'excludes': [],
-        'include_files':[(requests.certs.where(),'cacert.pem'),'WinTail.exe','README.md'],
+        'include_files':[(requests.certs.where(),'cacert.pem'),'WinTail.exe','README.md','tail.py'],
         'compressed': True,
         #'path': sys.path + ['modules'],
         'include_msvcr': True,
         'icon': 'swift.ico'
+    },
+    'bdist_msi': {
+        'upgrade_code': '{1AEF9B5A-D776-4224-C8D3-EBB1A7861231}',
+        'add_to_path': False,
+        'initial_target_dir': 'C:\\Program Files\\OpenStack\\Swift',
     }
 }
 
@@ -49,7 +54,7 @@ options = {
 executables = [
     Executable(
                script='SwiftClientGUI.py',
-               shortcutName='Setup Openstack Swift Client',
+               shortcutName='Openstack Swift Client GUI',
                shortcutDir='ProgramMenuFolder',
                #targetDir='OpenStack\\Swift',
                base=basegui),
@@ -58,7 +63,7 @@ executables = [
 
 setup(name='OpenStack Swift Client',
       version='2.6.0',
-      description='OpenStack Swift command line python based client with optional GUI',
+      description='OpenStack Swift Client with optional GUI',
       options=options,
       executables=executables
       )
