@@ -1,9 +1,15 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import sys,os
+import sys, os
 import time
-from Tkinter import *
-from ScrolledText import ScrolledText
+
+if sys.hexversion > 0x03000000:
+    from tkinter import *
+    from tkinter.scrolledtext import ScrolledText
+else:
+    from Tkinter import *
+    from ScrolledText import ScrolledText
+
 
 class LogViewer(Frame):
     def __init__(self, parent, filename):
@@ -26,5 +32,13 @@ class LogViewer(Frame):
 
 if __name__ == "__main__":
     root = Tk()
-    viewer = LogViewer(root, sys.argv[1])
-    viewer.mainloop()
+    logfile=''
+    if len(sys.argv) > 1:
+        logfile = sys.argv[1]
+    if os.path.exists(logfile):
+        viewer = LogViewer(root, sys.argv[1])
+        viewer.mainloop()
+    elif logfile == '':
+        print('usage: tail.py <filename>')
+    else:
+        print('file %s not found' % logfile)

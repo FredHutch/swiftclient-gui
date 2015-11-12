@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -10,7 +10,7 @@ import sys, os, inspect, argparse, logging, json, subprocess
 import getpass, optparse, tempfile, socket, base64
 import easygui
 import swiftclient, keystoneclient
-import decryptsme
+#import decryptsme
 
 from swiftclient import shell
 from swiftclient import RequestException
@@ -30,14 +30,14 @@ __copy_date__ = "2015"
 __author__ = "Dirk Petersen <dirk11@fredhutch.org>"
 __company__ = "Fred Hutch, Seattle"
 
-IP = socket.gethostbyname(socket.gethostname())
-
 HKEY_CURRENT_USER = -2147483647
 HKEY_LOCAL_MACHINE = -2147483646
 REG_SZ = 1
 REG_DWORD = 4
-USERNAME = getpass.getuser()
 KEY = 'gjkdjgndfhdgfgdldfgj902u54nkk34u8os'
+USERNAME = getpass.getuser()
+OS = sys.platform
+IP = socket.gethostbyname(socket.gethostname())
 
 if IP.startswith('140.107.'):
     DEFAULT_AUTH_URL="https://tin.fhcrc.org/auth/v2.0"
@@ -63,13 +63,14 @@ logger.info('username: %s  temp: %s' % (USERNAME, tempfile.gettempdir()))
 #sys.stdout = open(os.path.join(tempfile.gettempdir(),"SwiftClientGUI.out.txt"), 'w')
 #sys.stderr = open(os.path.join(tempfile.gettempdir(),"SwiftClientGUI.err.txt"), 'w')
 
-
 def main(args):
     """ main entry point """
 
     global _default_global_options
     # set environment var for valid CA SSL cert
-    os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(get_script_dir(), "cacert.pem")
+    if not OS.startswith('linux'):
+        os.environ["REQUESTS_CA_BUNDLE"] = os.path.join(get_script_dir(), "cacert.pem")
+        
     meta=[]
     authlist=setup_read()
     
@@ -118,17 +119,19 @@ def main(args):
             sys.exit()
             
     if args.downloadtofolder:
-        args.downloadtofolder=args.downloadtofolder.replace('\\','/')
-        args.downloadtofolder=args.downloadtofolder.strip('/')
+        if OS == "win32":
+            args.downloadtofolder=args.downloadtofolder.replace('\\','/')
+        args.downloadtofolder=args.downloadtofolder.rstrip('/')
         basename=os.path.basename(args.downloadtofolder)
         #easygui.msgbox("Will now download from Swift to folder %s" % args.downloadtofolder, "%s launched from %s" % (__app__, args.downloadtofolder))
         container,prefix=selSwiftFolderDownload(_default_global_options,swifttenant)
         subdir=container+'/'+prefix
-        subdir=os.path.basename(subdir.strip('/'))
+        subdir=os.path.basename(subdir.rstrip('/'))
         ret=download_folder_from_swift(args.downloadtofolder+'/'+subdir,prefix,container)       
     elif args.uploadfolder:
-        args.uploadfolder=args.uploadfolder.replace('\\','/')
-        args.uploadfolder=args.uploadfolder.strip('/')
+        if OS == "win32":
+            args.uploadfolder=args.uploadfolder.replace('\\','/')
+        args.uploadfolder=args.uploadfolder.rstrip('/')
         basename=os.path.basename(args.uploadfolder)
         container=selSwiftFolderUpload(_default_global_options,swifttenant,basename)
         if container:
@@ -173,7 +176,7 @@ def selSwiftFolderDownload(options,swifttenant):
                     container = ''
                     myoptions={'prefix': None}
                 else:
-                    choice=os.path.dirname(oldchoice.strip("/"))+'/'
+                    choice=os.path.dirname(oldchoice.rstrip("/"))+'/'
                     if choice == '/':
                         choice=container
                         container=''
@@ -234,19 +237,26 @@ def getMyFile():
         myFile = os.path.abspath(sys.executable)
     return myFile
 
+def gettailcmd(outpath):
+    if OS == "win32":
+        wintail = os.path.join(get_script_dir(),'wintail.exe')
+        return [wintail,outpath]
+    else:
+        pytail = os.path.join(get_script_dir(),'tail.py')
+        return [sys.executable,pytail,outpath]
+    
 def upload_folder_to_swift(fname,swiftname,container,meta):
     oldout = sys.stdout
     olderr = sys.stderr
-    outfile = 'Swift_upload_'+container+'_'+swiftname.replace('/','_')+".log"
+    outfile = 'Swift_upload_'+container+'_'+swiftname.rstrip('/').replace('/','_')+".log"
     outpath = os.path.join(tempfile.gettempdir(),outfile)
-    wintail = os.path.join(get_script_dir(),'wintail.exe')
     fh = open(outpath, 'w')
     sys.stdout = fh
     sys.stderr = fh
     print("upload logging to %s" % outpath)
     print("uploading to %s/%s, please wait ....." % (container,swiftname))
     sys.stdout.flush()
-    tailpid=subprocess.Popen([wintail, outpath])
+    tailpid=subprocess.Popen(gettailcmd(outpath))
     final=[container,fname]
     if meta:
         final=meta+final
@@ -267,14 +277,13 @@ def download_folder_from_swift(fname,swiftname,container):
     olderr = sys.stderr
     outfile = 'Swift_download_'+container+'_'+swiftname.replace('/','_')+".log"
     outpath = os.path.join(tempfile.gettempdir(),outfile)
-    wintail = os.path.join(get_script_dir(),'wintail.exe')
     fh = open(outpath, 'w')
     sys.stdout = fh
     sys.stderr = fh
     print("download logging to %s" % outpath)
     print("downloading to %s/%s, please wait ....." % (container,swiftname))
     sys.stdout.flush()
-    tailpid=subprocess.Popen([wintail, outpath])
+    tailpid=subprocess.Popen(gettailcmd(outpath))
     sw_download('--prefix='+swiftname,
         '--output-dir='+fname,
         '--remove-prefix',
@@ -387,8 +396,7 @@ def decode(KEY, enc):
         dec.append(dec_c)
     return "".join(dec)
 
-def setup_read():
-    OS = sys.platform
+def setup_read():    
     if OS == "linux2" or OS == "linux":
         authlist = setup_read_linux()
     elif OS == "win32":
@@ -475,14 +483,17 @@ def setup_read_linux():
     # instantiate
     config = ConfigParser()
 
-    # parse existing file
-    config.read(homedir+'/.swift/swiftclient.ini')
+    try:
+        # parse existing file
+        config.read(homedir+'/.swift/swiftclient.ini')
 
-    # add a new section and some values
-    authlist[0] = config.get('default', 'auth_url')
-    authlist[1] = config.get('default', 'tenant')
-    authlist[2] = config.get('default', 'user')
-    authlist[3] = decode(KEY,config.get('default', 'pass'))
+        # add a new section and some values
+        authlist[0] = config.get('default', 'auth_url')
+        authlist[1] = config.get('default', 'tenant')
+        authlist[2] = config.get('default', 'user')
+        authlist[3] = decode(KEY,config.get('default', 'pass'))
+    except:
+        print('error reading config swiftclient.ini')
     
     return authlist
 
@@ -522,22 +533,24 @@ def setup_write_linux(authlist):
     #config.read('test.ini')
 
     # add a new section and some values
-    config.add_section('default')
-    config.set('default', 'auth_url', authlist[0])
-    config.set('default', 'tenant', authlist[1])
-    config.set('default', 'user', authlist[2])
-    config.set('default', 'pass', encode(KEY,authlist[3]))
 
-    # save to a file
-    homedir = os.path.expanduser('~')
-    if not os.path.exists(homedir+'/.swift'):
-        os.makedirs(homedir+'/.swift')
-    with open(homedir+'/.swift/swiftclient.ini', 'w') as configfile:
-        config.write(configfile)
+    if authlist:
+        config.add_section('default')
+        config.set('default', 'auth_url', authlist[0])
+        config.set('default', 'tenant', authlist[1])
+        config.set('default', 'user', authlist[2])
+        config.set('default', 'pass', encode(KEY,authlist[3]))
 
-    return authlist
+        # save to a file
+        homedir = os.path.expanduser('~')
+        if not os.path.exists(homedir+'/.swift'):
+            os.makedirs(homedir+'/.swift')
+        with open(homedir+'/.swift/swiftclient.ini', 'w') as configfile:
+            config.write(configfile)
+        return authlist
+    else:
+        return None
     
-
 def setup_write_win(authlist):
     """ setup is executed if this program is started without any command line args. """
     if sys.hexversion > 0x03000000:
