@@ -104,6 +104,7 @@ def main(args):
 
     #args.uploadfolder='c:/temp/test'
     #args.downloadtofolder='c:/temp/test'
+    args.downloadtofolder='d:/aaa'
 
     if not args.downloadtofolder and not args.uploadfolder:
         choices = ["Upload to Swift","Download from Swift","Change Credentials","Cancel"]
@@ -125,9 +126,13 @@ def main(args):
         basename=os.path.basename(args.downloadtofolder)
         #easygui.msgbox("Will now download from Swift to folder %s" % args.downloadtofolder, "%s launched from %s" % (__app__, args.downloadtofolder))
         container,prefix=selSwiftFolderDownload(_default_global_options,swifttenant)
-        subdir=container+'/'+prefix
-        subdir=os.path.basename(subdir.rstrip('/'))
-        ret=download_folder_from_swift(args.downloadtofolder+'/'+subdir,prefix,container)       
+        if container:
+            subdir=container+'/'+prefix
+            subdir=os.path.basename(subdir.rstrip('/'))
+##            if prefix and OS == "win32":                
+##                prefix=prefix.rstrip('/')  # this is may be not optimal but ir addresses a filenot found error under windows 
+            print(args.downloadtofolder+'/'+subdir,container,prefix)
+            ret=download_folder_from_swift(args.downloadtofolder+'/'+subdir,prefix,container)       
     elif args.uploadfolder:
         if OS == "win32":
             args.uploadfolder=args.uploadfolder.replace('\\','/')
@@ -165,12 +170,14 @@ def selSwiftFolderDownload(options,swifttenant):
     oldchoice=''
     container=''
     prefix=''
+    level=0
     myoptions={'prefix': None}
     with SwiftService(options=options) as swift:
         
         while not choice.startswith('------------ DOWNLOAD FOLDER'):            
             visible_folders = []         
             if choice.startswith("------------ GO UP ONE LEVEL"):
+                level-=1
                 if not '/' in oldchoice:
                     choice = ''
                     container = ''
@@ -184,7 +191,8 @@ def selSwiftFolderDownload(options,swifttenant):
             #print('choice1:',choice)
             #visible_containers.append("----------- Switch Account (current: %s) --------------------" % swifttenant)
                         
-            if choice != '':                
+            if choice != '':
+                level+=1
                 if container == '':
                     container=choice
                     myoptions={'prefix': None, 'delimiter': '/'}
@@ -217,8 +225,13 @@ def selSwiftFolderDownload(options,swifttenant):
             oldchoice=choice
             choice = easygui.choicebox(msg,"Select Folder/Container for data transfer",visible_folders)
             if not choice:
-                return None, None
-    return container, oldchoice
+                return None, ""
+        print('level:',level)
+        if level<=1:
+            prefix=''
+        elif level>1:
+            prefix=oldchoice  
+    return container, prefix
                 
 def get_script_dir(follow_symlinks=True):
     if getattr(sys, 'frozen', False): # py2exe, PyInstaller, cx_Freeze
@@ -275,11 +288,14 @@ def upload_folder_to_swift(fname,swiftname,container,meta):
 def download_folder_from_swift(fname,swiftname,container):
     oldout = sys.stdout
     olderr = sys.stderr
-    outfile = 'Swift_download_'+container+'_'+swiftname.replace('/','_')+".log"
+    outfile = 'Swift_download_'+container+'_'+swiftname.rstrip('/').replace('/','_')+".log"
     outpath = os.path.join(tempfile.gettempdir(),outfile)
     fh = open(outpath, 'w')
     sys.stdout = fh
     sys.stderr = fh
+    print('fname:',fname)
+    print('container:',container)
+    print('prefix:',swiftname)
     print("download logging to %s" % outpath)
     print("downloading to %s/%s, please wait ....." % (container,swiftname))
     sys.stdout.flush()
