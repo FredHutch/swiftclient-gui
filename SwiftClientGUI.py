@@ -27,7 +27,7 @@ __app__ = "Swift Client GUI"
 __ver__ = "0.20"
 __ver_date__ = "2015-11-08" 
 __copy_date__ = "2015"
-__author__ = "Dirk Petersen <dirk11@fredhutch.org>"
+__author__ = "dirkpetersen"
 __company__ = "Fred Hutch, Seattle"
 
 HKEY_CURRENT_USER = -2147483647
@@ -539,8 +539,8 @@ def setup_read_win():
         authlist[3] = decode(KEY,winreg.QueryValueEx(mykey,"pass")[0])
     except:
         sme=True
-    sme=True
     if sme:
+        setup_write_win(None)
         try:
             import decryptsme
             mykey = winreg.OpenKey(MyHKEY,'Software\Vehera\OpenStack.Drive', 0, winreg.KEY_ALL_ACCESS)
