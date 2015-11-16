@@ -3,14 +3,14 @@
 
 """
 SwiftClientGUI is a simple wrapper for the Python Swift client that
-allows users to upload and download files to/from a swift object store
+allows users to upload and download files to/from a swift object store.
+Users are promted to set custom metadata 
 """
 
 import sys, os, inspect, argparse, logging, json, subprocess
-import getpass, optparse, tempfile, socket, base64
+import getpass, optparse, tempfile, socket, base64, urllib.request
 import easygui
 import swiftclient, keystoneclient
-#import decryptsme
 
 from swiftclient import shell
 from swiftclient import RequestException
@@ -66,6 +66,9 @@ logger.info('username: %s  temp: %s' % (USERNAME, tempfile.gettempdir()))
 def main(args):
     """ main entry point """
 
+    #getDriveAuth()
+    #sys.exit()
+
     global _default_global_options
     # set environment var for valid CA SSL cert
     if not OS.startswith('linux'):
@@ -73,6 +76,9 @@ def main(args):
         
     meta=[]
     authlist=setup_read()
+    if not checkAuthServer():
+        easygui.msgbox('Cannot connect to Swift auth server. Wifi? VPN?',__app__)
+        return
     
 ##    print('os_auth_token', _default_global_options['os_auth_token'])
 ##    print('os_storage_url', _default_global_options['os_storage_url'])
@@ -87,11 +93,6 @@ def main(args):
 
 ##    _default_global_options['os_storage_url'] = 'https://tin.fhcrc.org/v1/AUTH_Swift__ADM_SciComp'
 ##    _default_global_options['os_auth_token'] = 'AUTH_tk3d7438ae35934666affdefbf26429ae3'
-
-##    _default_global_options['os_auth_url'] = 'https://tin.fhcrc.org/auth/v2.0'
-##    _default_global_options['os_username'] = 'petersen'
-##    _default_global_options['os_password'] = ''
-##    _default_global_options['os_tenant_name'] = 'AUTH_Swift__ADM_SciComp'
     
     stats=SwiftService(options=_default_global_options).stat()    
     while not stats["success"] == True:
@@ -104,15 +105,16 @@ def main(args):
 
     #args.uploadfolder='c:/temp/test'
     #args.downloadtofolder='c:/temp/test'
-    args.downloadtofolder='d:/aaa'
+    #args.downloadtofolder='d:/aaa/sub'
+    args.uploadfolder='d:/aaa/sub'
 
     if not args.downloadtofolder and not args.uploadfolder:
         choices = ["Upload to Swift","Download from Swift","Change Credentials","Cancel"]
         choice=easygui.buttonbox("To copy data from and to Swift please right click on a folder in Explorer and select 'Swift:...' ..... or select one of the following options", choices=choices)
         if choice == 'Upload to Swift':
-            args.uploadfolder=easygui.diropenbox("Please select a folder for upload","Uploading Folder")
+            args.uploadfolder=easygui.diropenbox("Please select a folder for upload","Uploading Folder to account/tenant %s" % swifttenant)
         elif choice == 'Download from Swift':
-            args.downloadtofolder=easygui.diropenbox("Please select a folder to download to.","Downloading to Folder")
+            args.downloadtofolder=easygui.diropenbox("Please select a folder to download to.","Downloading to Folder for account/tenant %s" % swifttenant)
         elif choice == 'Change Credentials':
             if not setup_write():
                 return False 
@@ -124,14 +126,10 @@ def main(args):
             args.downloadtofolder=args.downloadtofolder.replace('\\','/')
         args.downloadtofolder=args.downloadtofolder.rstrip('/')
         basename=os.path.basename(args.downloadtofolder)
-        #easygui.msgbox("Will now download from Swift to folder %s" % args.downloadtofolder, "%s launched from %s" % (__app__, args.downloadtofolder))
         container,prefix=selSwiftFolderDownload(_default_global_options,swifttenant)
         if container:
             subdir=container+'/'+prefix
             subdir=os.path.basename(subdir.rstrip('/'))
-##            if prefix and OS == "win32":                
-##                prefix=prefix.rstrip('/')  # this is may be not optimal but ir addresses a filenot found error under windows 
-            print(args.downloadtofolder+'/'+subdir,container,prefix)
             ret=download_folder_from_swift(args.downloadtofolder+'/'+subdir,prefix,container)       
     elif args.uploadfolder:
         if OS == "win32":
@@ -144,24 +142,56 @@ def main(args):
             if container.startswith("------------ Upload to root of (new) container"):
                 container=basename
                 pseudodir=''
-            ret=upload_folder_to_swift(args.uploadfolder,pseudodir,container,meta)
+            meta=setMetaData()
+            if meta is not None:
+                ret=upload_folder_to_swift(args.uploadfolder,pseudodir,container,meta)
 
-    #print("End")
+def checkAuthServer():
+    """ Check if swift auth server is reachable """
+    url=_default_global_options['os_auth_url']
+    if not url:
+        url=_default_global_options['auth']
+    if url:
+        try:
+            u=urllib.request.urlopen(url,timeout=1)
+            return True
+        except urllib.error.URLError as e:
+            #print (e.reason)
+            if hasattr(e, 'code'):
+                if e.code < 500:
+                    return True
+            return False
+    else:
+        return True
 
+def setMetaData():
+    msg = ("Annotate this upload with key:value pairs. This will allow you to "
+           "search for your data using this information. key:value pairs are "
+           "separated by colon.\n"
+           "Examples are fruit:banana or project_id:123467 or cancer:lung\n"
+           "If you do NOT want to add any metadata just click OK"
+           )
+    title = "OpenStack Swift metadata"
+    fieldNames = ["K:V 1", "K:V 2", "K:V 3", "K:V 4", "K:V 5"]
+    fieldValues = easygui.multenterbox(msg,title,fieldNames)
+    if fieldValues:
+        cleanedValues = []
+        for v in fieldValues:
+            if v != '':
+                cleanedValues.append("--header=X-Object-Meta-"+v)
+        return cleanedValues
+    return fieldValues
+    
 def selSwiftFolderUpload(options,swifttenant,basename):
     visible_containers = []
-    #visible_containers.append("----------- Switch Account (current: %s) --------------------" % swifttenant)
     visible_containers.append("------------ Upload to root of (new) container '%s'-----------" % basename)
     with SwiftService(options=options) as swift:
-        # Do work here
-        #x=swift.stat(container=None, objects=None, options=None)
-        #logger.info('swift stat: %s' % x)
         listing=swift.list(container=None, options=None)
         for o in listing:
             for i in o['listing']:
                 if not i['name'].startswith('.'):
                     visible_containers.append(i['name'])
-    msg="Please pick a root folder (container) to upload to"
+    msg="Please pick a root folder (container) to upload to account/tenant %s" % swifttenant
     choice = easygui.choicebox(msg,"Select Folder/Container for data transfer",visible_containers)
     return choice
 
@@ -188,9 +218,6 @@ def selSwiftFolderDownload(options,swifttenant):
                         choice=container
                         container=''
                                  
-            #print('choice1:',choice)
-            #visible_containers.append("----------- Switch Account (current: %s) --------------------" % swifttenant)
-                        
             if choice != '':
                 level+=1
                 if container == '':
@@ -226,7 +253,6 @@ def selSwiftFolderDownload(options,swifttenant):
             choice = easygui.choicebox(msg,"Select Folder/Container for data transfer",visible_folders)
             if not choice:
                 return None, ""
-        print('level:',level)
         if level<=1:
             prefix=''
         elif level>1:
@@ -293,9 +319,6 @@ def download_folder_from_swift(fname,swiftname,container):
     fh = open(outpath, 'w')
     sys.stdout = fh
     sys.stderr = fh
-    print('fname:',fname)
-    print('container:',container)
-    print('prefix:',swiftname)
     print("download logging to %s" % outpath)
     print("downloading to %s/%s, please wait ....." % (container,swiftname))
     sys.stdout.flush()
@@ -374,21 +397,6 @@ def sw_upload(*args):
 
 def sw_post(*args):
     sw_shell(shell.st_post,*args)
-
-def getDriveAuth():
-    # get config settings from openstack drive.
-    mykey = winreg.OpenKey(HKEY_CURRENT_USER,'Software\Vehera\OpenStack.Drive', 0, winreg.KEY_ALL_ACCESS)
-    swiftauthurl=winreg.QueryValueEx(mykey,"Endpoint")
-    print(swiftauthurl)
-    print(decryptsme.decrypt(swiftauthurl))
-    print(decryptsme.decrypt("##?&256UKCnrrvu<))roh(`nete(ita)gsrn)p4(6"))
-    print(winreg.QueryValueEx(mykey,"Tenant"))
-    print(decryptsme.decrypt("('##7$256WIAEQPL[Wsmbp[[E@I[WgmGkit', 1)"))
-    
-    swifttenant=decryptsme.decrypt(winreg.QueryValueEx(mykey,"Tenant"))
-    swiftaccount=decryptsme.decrypt(winreg.QueryValueEx(mykey,"Username"))
-    swiftpassword=decryptsme.decrypt(winreg.QueryValueEx(mykey,"Password"))
-    print(swiftauthurl, swifttenant, swiftaccount, swiftpassword)
 
 def encode(KEY, clear):
     enc = []
@@ -522,6 +530,7 @@ def setup_read_win():
     authlist = [""]*4
 
     MyHKEY = HKEY_CURRENT_USER
+    sme=False
     try:
         mykey = winreg.OpenKey(MyHKEY,'SOFTWARE\OpenStack\SwiftClient', 0, winreg.KEY_ALL_ACCESS)
         authlist[0] = winreg.QueryValueEx(mykey,"auth_url")[0]
@@ -529,7 +538,18 @@ def setup_read_win():
         authlist[2] = winreg.QueryValueEx(mykey,"user")[0]
         authlist[3] = decode(KEY,winreg.QueryValueEx(mykey,"pass")[0])
     except:
-        print ("Error reading data from registry")
+        sme=True
+    sme=True
+    if sme:
+        try:
+            import decryptsme
+            mykey = winreg.OpenKey(MyHKEY,'Software\Vehera\OpenStack.Drive', 0, winreg.KEY_ALL_ACCESS)
+            authlist[0] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Endpoint")[0]))
+            authlist[1] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Tenant")[0]))
+            authlist[2] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Username")[0]))
+            authlist[3] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Password")[0]))
+        except:
+            sme=False
     return authlist
     
 def setup_read_mac(authlist):
