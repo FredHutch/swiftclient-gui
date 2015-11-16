@@ -320,7 +320,7 @@ def download_folder_from_swift(fname,swiftname,container):
     sys.stdout = fh
     sys.stderr = fh
     print("download logging to %s" % outpath)
-    print("downloading to %s/%s, please wait ....." % (container,swiftname))
+    print("downloading from %s/%s, please wait ....." % (container,swiftname))
     sys.stdout.flush()
     tailpid=subprocess.Popen(gettailcmd(outpath))
     sw_download('--prefix='+swiftname,
