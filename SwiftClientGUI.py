@@ -24,7 +24,7 @@ class KeyboardInterruptError(Exception): pass
 
 #constants
 __app__ = "Swift Client GUI"
-__ver__ = "0.17"
+__ver__ = "0.20"
 __ver_date__ = "2015-11-08" 
 __copy_date__ = "2015"
 __author__ = "Dirk Petersen <dirk11@fredhutch.org>"
@@ -106,7 +106,7 @@ def main(args):
     #args.uploadfolder='c:/temp/test'
     #args.downloadtofolder='c:/temp/test'
     #args.downloadtofolder='d:/aaa/sub'
-    args.uploadfolder='d:/aaa/sub'
+    #args.uploadfolder='d:/aaa/sub'
 
     if not args.downloadtofolder and not args.uploadfolder:
         choices = ["Upload to Swift","Download from Swift","Change Credentials","Cancel"]
