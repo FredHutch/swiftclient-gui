@@ -12,6 +12,9 @@ import getpass, optparse, tempfile, socket, base64, urllib.request
 import easygui
 import swiftclient, keystoneclient
 
+import packaging, packaging.version, packaging.markers # needed since Python 3.5
+import packaging.requirements, packaging.specifiers, packaging.utils
+
 from swiftclient import shell
 from swiftclient import RequestException
 from swiftclient.exceptions import ClientException
@@ -100,6 +103,7 @@ def main(args):
             return False        
         authlist=setup_read()
         stats=SwiftService(options=_default_global_options).stat()
+        logger.info('SwiftService.stat(): %s' % stats)
 
     swifttenant=stats["items"][0][1]
 
@@ -154,10 +158,12 @@ def checkAuthServer():
     if url:
         try:
             u=urllib.request.urlopen(url,timeout=1)
+            logger.info('sucessfully tested url: %s' % url)
             return True
         except urllib.error.URLError as e:
             #print (e.reason)
             if hasattr(e, 'code'):
+                logger.info('error code: %s' % e.code)
                 if e.code < 500:
                     return True
             return False
@@ -367,6 +373,10 @@ def shell_minimal_options():
    parser.add_option('--os_service_type')
    parser.add_option('--os_endpoint_type')
    parser.add_option('--os_region_name', default=_default_global_options['os_region_name'])
+
+   # new mandatory bogosity required for swiftclient >= 3.0.0
+   parser.add_option('--debug')
+   parser.add_option('--info')
    
    parser.add_option('-v', '--verbose', action='count', dest='verbose',
        default=1, help='Print more info.')
@@ -424,6 +434,7 @@ def setup_read():
     if OS == "linux2" or OS == "linux":
         authlist = setup_read_linux()
     elif OS == "win32":
+        logger.info('detected Windows OS')
         authlist = setup_read_win()
     elif OS == "darwin":
         authlist = setup_read_mac()
@@ -534,8 +545,11 @@ def setup_read_win():
     try:
         mykey = winreg.OpenKey(MyHKEY,'SOFTWARE\OpenStack\SwiftClient', 0, winreg.KEY_ALL_ACCESS)
         authlist[0] = winreg.QueryValueEx(mykey,"auth_url")[0]
+        logger.info('auth_url: %s' % authlist[0])
         authlist[1] = winreg.QueryValueEx(mykey,"tenant")[0]
+        logger.info('tenant: %s' % authlist[1])
         authlist[2] = winreg.QueryValueEx(mykey,"user")[0]
+        logger.info('user: %s' % authlist[2])        
         authlist[3] = decode(KEY,winreg.QueryValueEx(mykey,"pass")[0])
     except:
         sme=True
@@ -545,8 +559,11 @@ def setup_read_win():
             import decryptsme
             mykey = winreg.OpenKey(MyHKEY,'Software\Vehera\OpenStack.Drive', 0, winreg.KEY_ALL_ACCESS)
             authlist[0] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Endpoint")[0]))
+            logger.info('SME Endpoint: %s' % authlist[0])
             authlist[1] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Tenant")[0]))
+            logger.info('SME Tenant: %s' % authlist[1])
             authlist[2] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Username")[0]))
+            logger.info('SME User: %s' % authlist[2])
             authlist[3] = decryptsme.decrypt(str(winreg.QueryValueEx(mykey,"Password")[0]))
         except:
             sme=False
@@ -623,6 +640,7 @@ def setup_write_win(authlist):
         winreg.SetValueEx(mykey, "tenant", None, REG_SZ, authlist[1])
         winreg.SetValueEx(mykey, "user", None, REG_SZ, authlist[2])
         winreg.SetValueEx(mykey, "pass", None, REG_SZ, encode(KEY,authlist[3]))
+        
         mykey.Close()
         return authlist
     else:

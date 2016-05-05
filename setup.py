@@ -3,9 +3,15 @@
 # A simple setup script to create an executable that includes
 # the python-swiftclient and easygui. 
 
-import sys
+import sys, os 
 import requests.certs
 from cx_Freeze import setup, Executable
+
+pydir = os.path.dirname(sys.executable)
+dlldir = os.path.join(pydir,'DLLs')
+
+os.environ['TCL_LIBRARY'] = pydir + "\\tcl\\tcl8.6"
+os.environ['TK_LIBRARY'] = pydir + "\\tcl\\tk8.6"
 
 base = None
 basegui = None
@@ -19,11 +25,20 @@ options = {
         'packages': [],
         'includes': [],
         'excludes': [],
-        'include_files':[(requests.certs.where(),'cacert.pem'),'WinTail.exe','README.md','tail.py'],
-        'compressed': True,
+        'include_files':[
+            (requests.certs.where(),'cacert.pem'),
+            'WinTail.exe',
+            'README.md',
+            'tail.py',
+            dlldir+'\\tk86t.dll',
+            dlldir+'\\tcl86t.dll',
+            #('resources', 'resources'),
+            #('config.ini', 'config.ini')
+            ],
+   # not in cx 5.0     'compressed': True,
         #'path': sys.path + ['modules'],
         'include_msvcr': True,
-        'icon': 'swift.ico'
+   # not in cx 5.0     'icon': 'swift.ico'
     },
     'bdist_msi': {
         'upgrade_code': '{1AEF9B5A-D776-4224-C8D3-EBB1A7861231}',
@@ -56,13 +71,17 @@ executables = [
                script='SwiftClientGUI.py',
                shortcutName='Openstack Swift Client GUI',
                shortcutDir='ProgramMenuFolder',
+               #compress=True,
+               icon='swift.ico',
                #targetDir='OpenStack\\Swift',
                base=basegui),
-    Executable('swift.py', base=base)
+    Executable('swift.py',
+               icon='swift.ico',
+               base=base)
 ]
 
 setup(name='OpenStack Swift Client',
-      version='2.6.0',
+      version='3.0.0',
       description='OpenStack Swift Client with optional GUI',
       options=options,
       executables=executables

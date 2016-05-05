@@ -8,3 +8,8 @@ If you use this make sure that your python-swidftclient 2.6.0 is patched:
 https://github.com/FredHutch/python-swiftclient/commit/57ecf5034b1f58566fe06b6ddfde3d932dbf207b
 
 
+before bulding an msi make sure you hardcode the __version__ string 
+and disable the line that tries to use pbr.version in all modules under site-packages, eg
+\Lib\site-packages\keystoneclient\__init__.py
+\Lib\site-packages\swiftclient\version.py
+
