@@ -395,7 +395,6 @@ def sw_shell(sw_fun,*args):
       parser = shell_minimal_options()
       try:
          sw_fun(parser, list(args), output)
-         #easygui.codebox("Contents of file", "Show File Contents", output)
       except (ClientException, RequestException, socket.error) as err:
          output.error(str(err))
  
