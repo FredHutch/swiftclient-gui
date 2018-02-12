@@ -81,7 +81,7 @@ executables = [
 ]
 
 setup(name='OpenStack Swift Client',
-      version='3.0.0',
+      version='3.5.0',
       description='OpenStack Swift Client with optional GUI',
       options=options,
       executables=executables
